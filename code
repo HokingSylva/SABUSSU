@@ -1,0 +1,331 @@
+import pyaudio
+import numpy as np
+import time
+import wave
+import tkinter as tk
+from tkinter import messagebox as msg
+import random
+import threading as thd
+
+
+Key_Value = random.randrange(0,3)
+
+Sound_Group = {0:'sound\\혹시 마이크를 끄고 계신건가요.wav',
+               1: 'sound\\거기 누구 없소.wav',
+               2: 'sound\\아니 주인님 왜 방송중인데 아무 소리도 나지 않는거죠.wav'}
+
+
+CHUNK = 1024
+RATE = 44100
+
+C = 0
+
+Switch = 0
+
+Sample = 0
+
+TIC = 0
+
+def Bgm_Player():
+
+    Key_Value = random.randrange(0,3)
+    Sound_Group = {0:'sound\\혹시 마이크를 끄고 계신건가요.wav',
+                   1: 'sound\\거기 누구 없소.wav',
+                   2: 'sound\\아니 주인님 왜 방송중인데 아무 소리도 나지 않는거죠.wav'}
+
+
+    with wave.open(Sound_Group[Key_Value], 'rb') as f:
+        p = pyaudio.PyAudio()
+        stream = p.open(format = p.get_format_from_width(f.getsampwidth()),
+                        channels = f.getnchannels(),
+                        rate = f.getframerate(),
+                        output = True)
+        data = f.readframes(CHUNK)
+        while data:
+            stream.write(data)
+            data= f.readframes(CHUNK)
+
+        stream.write(data)
+        stream.close()
+
+        p.terminate()
+
+def switch():
+
+    global Switch
+
+    if Switch ==1:
+        Switch = 0
+
+    elif Switch == 0:
+        Switch=1
+
+def RealtimeRecording():
+
+    global Switch
+
+    Switch = 0
+
+
+    
+    RSL= []
+
+    finish = 0
+
+    p=pyaudio.PyAudio()
+    stream=p.open(format=pyaudio.paInt16,
+                  channels=1,
+                  rate=RATE,
+                  input=True,
+                  frames_per_buffer=CHUNK,
+                  input_device_index=1)
+
+    while Switch == 0:
+
+
+        data = np.frombuffer(stream.read(CHUNK),dtype=np.int16)
+
+        time.sleep(0.1)
+
+        RSL.append(int(np.average(np.abs(data))))
+
+        Realtime_Sound_Level = max(RSL)
+        
+        print(Realtime_Sound_Level)
+
+        Compare_Realtime_With_Sample(Realtime_Sound_Level,Sample)
+
+        if TIC == C:
+            Bgm_Player()
+
+        print(TIC)
+        RSL = []
+
+ 
+    stream.stop_stream()
+    stream.close()
+    p.terminate()
+
+def Sample_Recording():
+
+    global Sample
+
+    t_end = time.time() + 6
+
+    SSL = []
+
+    File_Name = "sample.wav"
+
+    audio = pyaudio.PyAudio()
+
+    stream = audio.open(format = pyaudio.paInt16,
+                        channels = 1,
+                        rate = 44100,
+                        input= True,
+                        input_device_index=1,
+                        frames_per_buffer=1024)
+
+    frames = []
+
+    while (time.time() <= t_end):
+         
+       data = np.frombuffer(stream.read(CHUNK),dtype=np.int16)
+       frames.append(data)
+       SSL.append(int(np.average(np.abs(data))))
+    
+    Sample = max(SSL)
+
+
+    stream.stop_stream()
+    stream.close()
+    audio.terminate()
+
+    waveFile = wave.open(File_Name, 'wb')
+    waveFile.setnchannels(1)
+    waveFile.setsampwidth(audio.get_sample_size(pyaudio.paInt16))
+    waveFile.setframerate(44100)
+    waveFile.writeframes(b''.join(frames))
+    waveFile.close()
+
+def Compare_Realtime_With_Sample(s,p):
+
+    global TIC
+
+    if s <= p:
+
+        TIC = TIC+0.1
+
+    elif s > p:
+        TIC = 0
+
+    return TIC      
+
+def Option_Menu():
+
+    Opt=tk.Tk()
+    Opt.title('옵션')
+    Opt.geometry('300x200+740+300')
+
+    Option1 = tk.Button(Opt,
+                        text = '주변 소음 측정하기',
+                        width = 300,
+                        command = Noise_Measure)
+    
+    Option2 = tk.Button(Opt,
+                        text = '타이머 설정',
+                        width = 300,
+                        command = Timer_Option)
+    
+    Option1.pack(side = 'top')
+    Option2.pack(side = 'top')
+
+    Opt.mainloop()
+
+def Timer_Option():
+ 
+    TO = tk.Tk()
+    TO.title('타이머 설정하기')
+    TO.geometry('300x100+740+300')
+
+    Explain = tk.Label(TO,
+                       text = '타이머는 5초부터 5분까지 설정이 가능합니다.')
+    Explain.pack(side = 'top')
+
+    
+    textbox = tk.Entry(TO,
+                        width = 300)
+    textbox.insert(0,'1')
+    textbox.pack(side = 'top')
+
+    print(textbox.get()) 
+
+    def Message():
+
+        global C
+
+        C = int(textbox.get())
+       
+        if C> 300 :
+
+            print(C)
+            
+            Error = msg.showerror('에러','타이머는 5초부터 5분까지 설정이 가능합니다')
+
+        elif C< 5 :
+
+            print(C)
+            
+            Error = msg.showerror('에러','타이머는 5초부터 5분까지 설정이 가능합니다')
+
+        else:
+            TO.destroy()
+
+
+
+    confirm = tk.Button(TO,
+                         text = '확인',
+                         command = Message)
+
+    confirm.pack(side = 'bottom')
+
+def Noise_Measure():
+
+    Ti = time.time() + 5
+
+    NM = tk.Tk()
+    NM.title('주변 소음 측정하기')
+    NM.geometry('300x200+740+400')
+
+
+    
+
+    MS = tk.Button(NM,
+                   text = '측정시작하기',
+                   width = 300,
+                   command = lambda:[ Sample_Recording(), NM.destroy()]
+                   )
+    MS.pack(side = 'top')
+
+    ML1 = tk.Label(NM, text = '버튼을 누르고 5초동안 조용히 있어주세요.')
+    ML2 = tk.Label(NM, text = ' 측정이 끝난 후 창이 자동으로 닫힙니다.')
+    ML1.pack(side = 'bottom')
+    ML2.pack(side = 'bottom')
+    NM.mainloop()
+
+
+    if time.time() == Ti:
+        NM.destroy()
+
+
+def th():
+
+    th = thd.Thread(target = RealtimeRecording)
+    th.daemon = True
+    th.start()
+
+
+    
+          
+
+def COMPARING():
+
+    SP=tk.Tk()
+    SP.title('사운드체크중')
+    SP.geometry('1200x600+740+400')
+    
+    Label = tk.Label(SP, text = '사운드체크를 시작하려면 시작을 눌러주세요.',font = ('바탕',30))
+    Label.pack()
+
+
+    def Exp():
+        Label.configure(text = '사운드를 체크중입니다. 쉬지 않고 말해주세요')
+
+    def EExp():
+        Label.configure(text = '사운드체크를 시작하려면 시작을 눌러주세요.')
+        
+
+    STOP = tk.Button(SP,
+                     text = '정지',
+                     width = 50,
+                     command = lambda:[switch(), EExp()])
+    STOP.place(x=835 , y= 550)
+    START = tk.Button(SP,
+                      text = '시작',
+                      width = 50,
+                      command =lambda:[Exp(), th()])
+    START.place(x=5, y= 550)
+
+def Main():
+
+    base =tk.Tk()
+    base.title('사운드가 비면 쓰나!')
+    base.geometry('1646x991+740+400')
+
+    Start_Img = tk.PhotoImage(file = 'img\\st.png')
+    Option_Img = tk.PhotoImage(file = 'img\\option.png')
+    WallPaper_Img = tk.PhotoImage(file = 'img\\WallPaper.png')
+
+    WallPaperLabel = tk.Label(image = WallPaper_Img, width = 1646, height = 991)
+
+    WallPaperLabel.place(x=0,y=0)
+
+    Start_btn1 = tk.Button(base,
+                           image = Start_Img,
+                           height = 200,
+                           width = 200,
+                           command = COMPARING,
+                           border = '0')
+
+    Start_btn1.place(x=200, y= 0)
+    Option_btn = tk.Button(base,
+                           image = Option_Img,
+                           height = 200,
+                           width = 200,
+                           command = Option_Menu,
+                           border = '0')
+
+    Option_btn.place(x=1000, y=0)
+
+    base.mainloop()
+
+Main()
